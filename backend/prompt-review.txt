@@ -13,39 +13,14 @@ CRITICAL SYNTAX RULES:
 - Every ++ must have a matching ++
 - Correct pattern: --old--++new++
 - WRONG: --old--++new--++ (mixing markers)
+- Mark each error individually; do not merge multiple errors into a single markup unless word order changes significantly.
+- Only mark the EXACT words/letters that are wrong. Do NOT replace entire sentences.
 
-CORRECTION STRATEGY - MINIMAL CHANGES:
-Only mark the EXACT words/letters that are wrong. Do NOT replace entire sentences.
-
-GOOD examples:
-- "Liebe Egor" → "Lieb--e--++er++ Egor" (only the ending)
-- "meinen alten" → "--meinen--++meiner++ alten" (only the wrong word)
-- "ein Supermarkt" → "--ein--++einen++ Supermarkt"
-- "hellige" → "hel--li--++l++e" (only wrong letters)
-- "Alternativ, kannst" → "Alternativ--,-- kannst" (just remove comma)
-
-BAD examples (too aggressive):
-- "--Liebe Egor,--++Lieber Egor,++" ❌ (replaced too much)
-- "--Ich bin aus meinen alten Wohnung--++Ich bin aus meiner alten Wohnung++" ❌
-
-ONLY replace whole phrases when word order changes significantly:
-- "ohne auch Auto" → "--ohne auch--++auch ohne++ Auto"
-- "ich habe sehr lange von dir nicht gehört" → "--ich habe sehr lange von dir nicht gehört--++Ich habe lange nichts von dir gehört++"
-
-WHAT TO CORRECT: spelling, grammar, punctuation, word order, case/gender errors
-
-ALSO CHECK:
-- Capitalization rules (after commas, salutations, etc.)
-- Unnecessary commas (especially after adverbs)
-- Natural German word order and phrasing
-
-WHAT NOT TO CORRECT: style preferences, correct alternatives
-
-SCORING (0-100 per TELC B1 standards)
+SCORING (0-100 according to TELC B1 standards)
 
 OUTPUT (valid JSON only, so that i could parse it directly into object):
 {
   "score": number,
-  "feedback": "Brief feedback.",
+  "feedback": "Brief feedback. Always write if I would pass the task according to B1 or not",
   "correction": "Full text with minimal --error--++fix++ markup. Use \\n for paragraphs."
 }

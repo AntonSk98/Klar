@@ -87,6 +87,8 @@ document.addEventListener('DOMContentLoaded', async () => {
         const reviewReadonlyCorrectionSpan = document.getElementById('review-readonly-correction');
         const reviewEditableCorrectionTextarea = document.getElementById('review-editable-correction');
 
+        enableAutosave(reviewEditableCorrectionTextarea, 'content-review-correction');
+
         reviewScoreSpan.textContent = score;
         reviewFeedbackSpan.textContent = feedback;
 
@@ -119,7 +121,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         })
 
 
-        feedbackSection.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        feedbackSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
 
 
 
@@ -134,16 +136,15 @@ document.addEventListener('DOMContentLoaded', async () => {
             .replace(/>/g, '&gt;')
             .replace(/\n/g, '<br>'); // preserve line breaks
 
-        // Regex to match $-...-$ and $+...+$
-        // Handles multiple occurrences and adjacency
+        // Regex to match --..-- and ++...++
         const regex = /--(.*?)--|\+\+(.*?)\+\+/g;
 
         // Replace matches with HTML spans
         const html = escaped.replace(regex, (_, removed, added) => {
             if (removed !== undefined) {
-                return `<span class="bg-danger font-weight-bold">${removed}</span>`;
+                return `<span class="bg-removed px-1 rounded">${removed}</span>`;
             } else if (added !== undefined) {
-                return `<span class="bg-success font-weight-bold">${added}</span>`;
+                return `<span class="bg-added px-1 rounded">${added}</span>`;
             }
             return '';
         });
@@ -155,7 +156,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     function makeFileReadonly() {
         taskTextarea.disabled = true;
         contentTextarea.disabled = true;
-        submitBtn.innerText = 'Review again';
+        submitBtn.innerHTML = '<i class="bi bi-arrow-clockwise me-2"></i>Review Again';
     }
 
     function countWords(text) {
@@ -251,8 +252,12 @@ document.addEventListener('DOMContentLoaded', async () => {
 
             onContentFinishedReview()
         } catch (error) {
+            // Ignore errors caused by page reload/navigation
+            if (error.name === 'AbortError' || error.name === 'TypeError') {
+                console.log('Request cancelled (page reload or navigation)');
+                return;
+            }
             console.error('Error while submitting content for review:', error);
-            alert('❌ Error: Failed to submit content. Please try again.');
             onContentFailedReview();
         }
     }
