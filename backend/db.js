@@ -79,48 +79,15 @@ async function deleteData(key) {
 }
 
 /**
- * Get task content for a given key
- * @param {string} key - The base key (without -task suffix)
- * @returns {string} The task content
- */
-async function getTaskContent(key) {
-    return await getData(`${key}-task`);
-}
-
-/**
- * Get main content for a given key
- * @param {string} key - The base key (without -content suffix)
- * @returns {string} The content
- */
-async function getContent(key) {
-    return await getData(`${key}-content`);
-}
-
-/**
- * Set task content for a given key
- * @param {string} key - The base key
- * @param {string} value - The task content
- */
-async function setTaskContent(key, value) {
-    await setData(`${key}-task`, value);
-}
-
-/**
- * Set main content for a given key
- * @param {string} key - The base key
- * @param {string} value - The content
- */
-async function setContent(key, value) {
-    await setData(`${key}-content`, value);
-}
-
-/**
  * Delete all data associated with a key (task and content)
  * @param {string} key - The base key
  */
 async function deletePageData(key) {
     await deleteData(`${key}-task`);
     await deleteData(`${key}-content`);
+    await deleteData(`${key}-content-review-score`);
+    await deleteData(`${key}-content-review-feedback`);
+    await deleteData(`${key}-content-review-correction`);
 }
 
 module.exports = {
@@ -128,10 +95,5 @@ module.exports = {
     getData,
     setData,
     deleteData,
-    getTaskContent,
-    getContent,
-    setTaskContent,
-    setContent,
     deletePageData,
-    DB_PATH
 };

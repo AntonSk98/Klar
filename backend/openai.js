@@ -1,4 +1,8 @@
 const OpenAI = require('openai');
+const fs = require('fs');
+const path = require('path');
+
+
 
 // Load environment variables
 require('dotenv').config();
@@ -10,9 +14,11 @@ if (!process.env.OPENAI_TOKEN) {
 if (!process.env.MODEL) {
     throw new Error('MODEL environment variable is required. Please set it in your .env file.');
 }
-if (!process.env.PROMPT) {
-    throw new Error('PROMPT environment variable is required. Please set it in your .env file.');
-}
+
+const REVIEW_PROMPT = fs.readFileSync(
+    path.resolve('prompt-review.txt'),
+    'utf8'
+);
 
 // Initialize OpenAI client
 const openai = new OpenAI({
@@ -24,41 +30,31 @@ const openai = new OpenAI({
  * @param {string} text - The text to count words in
  * @returns {Promise<number>} The word count
  */
-async function countWords(text) {
+async function reviewContent(reviewContentCommand) {
     try {
         const completion = await openai.chat.completions.create({
             model: process.env.MODEL,
             messages: [
                 {
                     role: 'system',
-                    content: process.env.PROMPT
+                    content: REVIEW_PROMPT
                 },
                 {
                     role: 'user',
-                    content: text
+                    content: JSON.stringify(reviewContentCommand)
                 }
-            ],
-            temperature: 0.1,
-            max_tokens: 50
+            ]
         });
 
-        const response = completion.choices[0].message.content.trim();
+        const feedback = completion.choices[0].message.content;
 
-        // Try to parse the response as JSON
-        try {
-            const parsed = JSON.parse(response);
-            return parsed.wordCount || 0;
-        } catch (parseError) {
-            // If not JSON, try to extract number from text
-            const match = response.match(/\d+/);
-            return match ? parseInt(match[0]) : 0;
-        }
+        return JSON.parse(feedback);
     } catch (error) {
         console.error('OpenAI API error:', error);
-        throw new Error('Failed to count words using AI');
+        throw new Error('Failed to get review from OpenAI');
     }
 }
 
 module.exports = {
-    countWords
+    reviewContent
 };

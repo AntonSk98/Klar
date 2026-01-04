@@ -68,7 +68,7 @@
             }
 
             try {
-                const response = await fetch('/api/create-file', {
+                const response = await fetch('/api/file', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ filename })
@@ -94,7 +94,7 @@
             }
 
             try {
-                const response = await fetch('/api/delete-file', {
+                const response = await fetch('/api/file', {
                     method: 'DELETE',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ filename })

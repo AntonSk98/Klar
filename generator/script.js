@@ -1,12 +1,12 @@
 // Basic JavaScript for the simple HTML framework
 
 // Simple database using server-side JSON file for cross-browser persistence
-class ServerDB {
+class ApiClient {
     constructor(baseUrl = 'http://localhost:3000') {
         this.baseUrl = baseUrl;
     }
 
-    async set(key, value) {
+    async save(key, value) {
         try {
             const response = await fetch(`${this.baseUrl}/api/data/${encodeURIComponent(key)}`, {
                 method: 'POST',
@@ -18,13 +18,11 @@ class ServerDB {
             return response.ok;
         } catch (error) {
             console.error('Server save failed:', error);
-            // Fallback to localStorage
-            localStorage.setItem(key, value);
             return false;
         }
     }
 
-    async get(key) {
+    async require(key) {
         try {
             const response = await fetch(`${this.baseUrl}/api/data/${encodeURIComponent(key)}`);
             if (response.ok) {
@@ -34,144 +32,257 @@ class ServerDB {
         } catch (error) {
             console.error('Server load failed:', error);
         }
-
-        // Fallback to localStorage
-        return localStorage.getItem(key);
     }
 }
 
 // Wait for the DOM to be fully loaded before executing code
-document.addEventListener('DOMContentLoaded', async function() {
-    const db = new ServerDB();
+document.addEventListener('DOMContentLoaded', async () => {
+    const db = new ApiClient();
 
-    // Auto-save functionality for both textareas
     const taskTextarea = document.getElementById('task-input');
     const contentTextarea = document.getElementById('content-input');
+    const submitBtn = document.getElementById('submit-btn');
+    const feedbackSection = await initFeedbackSection();
 
-    // Function to setup auto-save for a textarea
-    function setupAutoSave(textarea, keySuffix) {
-        if (!textarea) return;
+    await loadSavedContent(taskTextarea, 'task');
+    await loadSavedContent(contentTextarea, 'content');
 
-        const storageKey = `${document.title}-${keySuffix}`;
+    submitBtn.addEventListener('click', () => reviewOnClick());
 
-        // Load saved content on page load
-        db.get(storageKey).then(savedContent => {
-            if (savedContent) {
-                textarea.value = savedContent;
-            }
-        }).catch(error => {
-            console.error(`Failed to load saved content for ${keySuffix}:`, error);
-        });
 
-        // Save content on every input (with debouncing)
-        let saveTimeout;
-        textarea.addEventListener('input', function() {
-            clearTimeout(saveTimeout);
-            saveTimeout = setTimeout(async () => {
-                const success = await db.set(storageKey, textarea.value);
-                if (!success) {
-                    console.warn(`Failed to save content for ${keySuffix}`);
-                }
-            }, 300); // Save after 300ms of no typing
-        });
+    if (feedbackSection) {
+        makeFileReadonly();
+        return;
     }
 
-    // Setup auto-save for both textareas
-    setupAutoSave(taskTextarea, 'task');
-    setupAutoSave(contentTextarea, 'content');
+    if (!taskTextarea || !contentTextarea || !submitBtn) {
+        console.error('Required elements not found in the DOM');
+        return;
+    }
 
-    // Submit button functionality
-    const submitBtn = document.getElementById('submit-btn');
 
-    // Function to count words
+    enableAutosave(taskTextarea, 'task');
+    enableAutosave(contentTextarea, 'content');
+
+    trackTextareaInput(contentTextarea);
+
+    submitBtn.disabled = true;
+
+    async function initFeedbackSection() {
+        const [score, feedback, correction] = await Promise.all([
+            db.require(reviewScoreKey()),
+            db.require(reviewFeedbackKey()),
+            db.require(reviewCorrectionKey())
+        ]);
+
+        if (!score || !feedback || !correction) {
+            return;
+        }
+
+        const feedbackSection = document.getElementById('review-section');
+        feedbackSection.hidden = false;
+
+        const reviewScoreSpan = document.getElementById('review-score');
+        const reviewFeedbackSpan = document.getElementById('review-feedback');
+        const reviewReadonlyCorrectionSpan = document.getElementById('review-readonly-correction');
+        const reviewEditableCorrectionTextarea = document.getElementById('review-editable-correction');
+
+        reviewScoreSpan.textContent = score;
+        reviewFeedbackSpan.textContent = feedback;
+
+        renderCorrection(correction, reviewReadonlyCorrectionSpan);
+        reviewEditableCorrectionTextarea.value = correction;
+        reviewEditableCorrectionTextarea.hidden = true;
+
+        reviewReadonlyCorrectionSpan.addEventListener('click', () => {
+            reviewReadonlyCorrectionSpan.hidden = true;
+            reviewEditableCorrectionTextarea.hidden = false;
+            reviewEditableCorrectionTextarea.focus();
+        });
+
+        let timeout;
+
+        [{ eventType: 'blur', delay: 500 }, { eventType: 'input', delay: 10000 }].forEach(({ eventType, delay }) => {
+
+            reviewEditableCorrectionTextarea.addEventListener(eventType, () => {
+                clearTimeout(timeout);
+
+                timeout = setTimeout(() => {
+                    const updatedText = reviewEditableCorrectionTextarea.value;
+
+                    renderCorrection(updatedText, reviewReadonlyCorrectionSpan);
+
+                    reviewReadonlyCorrectionSpan.hidden = false;
+                    reviewEditableCorrectionTextarea.hidden = true;
+                }, delay);
+            });
+        })
+
+
+        feedbackSection.scrollIntoView({ behavior: 'smooth', block: 'center' });
+
+
+
+        return feedbackSection;
+    }
+
+    function renderCorrection(text, container) {
+        // Escape HTML first
+        let escaped = text
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/\n/g, '<br>'); // preserve line breaks
+
+        // Regex to match $-...-$ and $+...+$
+        // Handles multiple occurrences and adjacency
+        const regex = /--(.*?)--|\+\+(.*?)\+\+/g;
+
+        // Replace matches with HTML spans
+        const html = escaped.replace(regex, (_, removed, added) => {
+            if (removed !== undefined) {
+                return `<span class="bg-danger font-weight-bold">${removed}</span>`;
+            } else if (added !== undefined) {
+                return `<span class="bg-success font-weight-bold">${added}</span>`;
+            }
+            return '';
+        });
+
+        container.innerHTML = html;
+    }
+
+
+    function makeFileReadonly() {
+        taskTextarea.disabled = true;
+        contentTextarea.disabled = true;
+        submitBtn.innerText = 'Review again';
+    }
+
     function countWords(text) {
         return text.trim().split(/\s+/).filter(word => word.length > 0).length;
     }
 
-    // Function to update submit button state
-    function updateSubmitButton() {
-        const taskWords = countWords(taskTextarea.value);
-        const contentWords = countWords(contentTextarea.value);
-        const totalWords = taskWords + contentWords;
-
-        submitBtn.disabled = totalWords < 100;
+    function taskKey() {
+        return key('task');
     }
 
-    // Auto-expand textareas with max height limit
-    // (Function moved to global scope above)
+    function contentKey() {
+        return key('content');
+    }
 
-    // Initialize textareas
-    [taskTextarea, contentTextarea].forEach(textarea => {
-        if (textarea) {
-            // Auto-expand on input
-            textarea.addEventListener('input', function() {
-                updateSubmitButton();
-            });
+    function reviewScoreKey() {
+        return key('content-review-score');
+    }
 
-            // Auto-expand on load if there's content
-            if (textarea.value.trim()) {
-                // Content is already loaded
+    function reviewFeedbackKey() {
+        return key('content-review-feedback');
+    }
+
+    function reviewCorrectionKey() {
+        return key('content-review-correction');
+    }
+
+    function key(keySuffix) {
+        return `${document.title}-${keySuffix}`;
+    }
+
+    function canSubmitWritingForReview() {
+        return countWords(contentTextarea.value) >= 100;
+    }
+
+    async function loadSavedContent(textarea, keySuffix) {
+        try {
+            const savedContent = await db.require(key(keySuffix));
+            if (savedContent) {
+                textarea.value = savedContent;
             }
+        } catch (error) {
+            console.error(`Failed to load saved content for ${keySuffix}:`, error);
         }
-    });
+    }
 
-    if (submitBtn) {
-        submitBtn.addEventListener('click', async function() {
-            const taskContent = taskTextarea.value.trim();
-            const contentText = contentTextarea.value.trim();
-            const totalWords = countWords(taskContent) + countWords(contentText);
+    function enableAutosave(textarea, keySuffix) {
+        let saveTimeout;
 
-            if (totalWords < 100) {
-                alert(`Please write at least 100 words. You currently have ${totalWords} words.`);
-                return;
-            }
-
-            // Show loading state
-            submitBtn.disabled = true;
-            submitBtn.innerHTML = '<span class="loader"></span> Processing...';
-            submitBtn.classList.add('loading');
-
-            // Disable textareas during processing
-            taskTextarea.disabled = true;
-            contentTextarea.disabled = true;
-            taskTextarea.style.opacity = '0.6';
-            contentTextarea.style.opacity = '0.6';
-
-            try {
-                // Send request to backend
-                const response = await fetch('/api/process-submission', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({ key: document.title })
-                });
-
-                const result = await response.json();
-
-                if (response.ok) {
-                    alert(`✅ Success! ${result.message}\nWord count: ${result.wordCount}`);
-                } else {
-                    alert(`❌ Error: ${result.error}`);
+        textarea.addEventListener('input', function () {
+            clearTimeout(saveTimeout);
+            saveTimeout = setTimeout(async () => {
+                const success = await db.save(key(keySuffix), textarea.value);
+                if (!success) {
+                    console.error(`Failed to save content for ${keySuffix}`);
                 }
-            } catch (error) {
-                console.error('Submission error:', error);
-                alert('❌ Error: Failed to submit content. Please try again.');
-            } finally {
-                // Reset button state
-                submitBtn.disabled = false;
-                submitBtn.innerHTML = 'Submit';
-                submitBtn.classList.remove('loading');
+            }, 500);
+        });
+    }
 
-                // Re-enable textareas
-                taskTextarea.disabled = false;
-                contentTextarea.disabled = false;
-                taskTextarea.style.opacity = '1';
-                contentTextarea.style.opacity = '1';
+    function trackTextareaInput(textarea) {
+        textarea.addEventListener('input', () => {
+            if (!canSubmitWritingForReview()) {
+                submitBtn.disabled = true;
+                return;
+            } else {
+                submitBtn.disabled = false;
             }
         });
+    }
 
-        // Initial button state
-        updateSubmitButton();
+    async function reviewOnClick() {
+        if (!canSubmitWritingForReview()) {
+            console.error('Not enough words to submit for review');
+            return;
+        }
+
+        onContentBeingReviewed();
+        const reviewContentCommand = {
+            taskId: taskKey(),
+            contentId: contentKey()
+        }
+
+        try {
+            const response = await fetch('/api/content/review', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(reviewContentCommand)
+            });
+
+            const feedback = await response.json();
+
+            onContentFinishedReview()
+        } catch (error) {
+            console.error('Error while submitting content for review:', error);
+            alert('❌ Error: Failed to submit content. Please try again.');
+            onContentFailedReview();
+        }
+    }
+
+    function onContentBeingReviewed() {
+        submitBtn.disabled = true;
+        submitBtn.innerHTML = '<span class="loader"></span> Processing...';
+        submitBtn.classList.add('loading');
+
+        // Disable textareas during processing
+        taskTextarea.disabled = true;
+        contentTextarea.disabled = true;
+
+        if (feedbackSection) {
+            feedbackSection.hidden = true;
+        }
+    }
+
+    function onContentFinishedReview() {
+        window.location.reload();
+    }
+
+    function onContentFailedReview() {
+        // Reset button state
+        submitBtn.disabled = false;
+        submitBtn.innerHTML = 'Try Again';
+        submitBtn.classList.remove('loading');
+
+        // Re-enable textareas
+        taskTextarea.disabled = false;
+        contentTextarea.disabled = false;
     }
 });

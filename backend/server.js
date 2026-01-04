@@ -15,7 +15,6 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(express.static(path.join(__dirname, '..'))); // Serve from project root
 
-// Data storage file (keeping for backward compatibility, but not used)
 const SOURCES_DIR = path.join(__dirname, '..', 'sources');
 
 // Ensure sources directory exists
@@ -23,7 +22,7 @@ if (!fs.existsSync(SOURCES_DIR)) {
     fs.mkdirSync(SOURCES_DIR, { recursive: true });
 }
 
-// API endpoints for data
+// API Endpoint to retreive data by key
 app.get('/api/data/:key', async (req, res) => {
     try {
         const value = await db.getData(req.params.key);
@@ -34,6 +33,7 @@ app.get('/api/data/:key', async (req, res) => {
     }
 });
 
+// API Endpoint to store data by key
 app.post('/api/data/:key', async (req, res) => {
     try {
         await db.setData(req.params.key, req.body.value);
@@ -44,8 +44,8 @@ app.post('/api/data/:key', async (req, res) => {
     }
 });
 
-// API endpoint to create new file
-app.post('/api/create-file', (req, res) => {
+// API Endpoint to create new file
+app.post('/api/file', (req, res) => {
     const { filename } = req.body;
     if (!filename) {
         return res.status(400).json({ error: 'Filename is required' });
@@ -83,7 +83,7 @@ app.post('/api/create-file', (req, res) => {
 });
 
 // API endpoint to delete a file
-app.delete('/api/delete-file', async (req, res) => {
+app.delete('/api/file', async (req, res) => {
     const { filename } = req.body;
     if (!filename) {
         return res.status(400).json({ error: 'Filename is required' });
@@ -115,7 +115,7 @@ app.delete('/api/delete-file', async (req, res) => {
     }
 });
 
-// API endpoint to list files
+// API Endpoint to list files
 app.get('/api/files', (req, res) => {
     try {
         const files = fs.readdirSync(SOURCES_DIR)
@@ -131,41 +131,34 @@ app.get('/api/files', (req, res) => {
     }
 });
 
-// API endpoint to process submission
-app.post('/api/process-submission', async (req, res) => {
-    const { key } = req.body;
-    if (!key) {
-        return res.status(400).json({ error: 'Key is required' });
+// API Endpoint to review the content
+app.post('/api/content/review', async (req, res) => {
+    const reviewContentCommand = req.body;
+    if (!reviewContentCommand) {
+        return res.status(400).json({ error: 'Review content command is required' });
     }
 
+
     try {
-        // Read content from database
-        const taskContent = await db.getTaskContent(key);
-        const contentText = await db.getContent(key);
+        const taskContent = await db.getData(reviewContentCommand.taskId);
+        const contentText = await db.getData(reviewContentCommand.contentId);
+        const review = await openai.reviewContent({ taskContent, contentText });
 
-        // Combine task and content
-        const fullText = `${taskContent} ${contentText}`.trim();
 
-        if (!fullText) {
-            return res.json({
-                success: true,
-                message: 'No content to process',
-                wordCount: 0
-            });
-        }
-
-        // Use OpenAI to count words
-        const wordCount = await openai.countWords(fullText);
+        await db.setData(`${reviewContentCommand.contentId}-review-score`, review.score);
+        await db.setData(`${reviewContentCommand.contentId}-review-feedback`, review.feedback);
+        await db.setData(`${reviewContentCommand.contentId}-review-correction`, review.correction);
 
         // Return success response
         res.json({
             success: true,
-            message: 'Content processed successfully',
-            wordCount: wordCount
+            message: 'AI review completed successfully',
+            feedback: review
         });
+
     } catch (error) {
-        console.error('Processing error:', error);
-        res.status(500).json({ error: 'Failed to process submission' });
+        console.error('Error while reviewing content:', error);
+        res.status(500).json({ error: 'Failed to review content' });
     }
 });
 
