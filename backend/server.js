@@ -110,12 +110,11 @@ app.post('/api/content/review', async (req, res) => {
 
         res.json({
             success: true,
-            message: 'AI review completed successfully',
-            feedback: review
+            message: 'AI review completed successfully'
         });
     } catch (error) {
         console.error('Error while reviewing content:', error);
-        res.status(500).json({ error: 'Failed to review content' });
+        res.status(500).json({ error: 'Failed to review content' } );
     }
 });
 

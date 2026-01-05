@@ -268,7 +268,9 @@ document.addEventListener('DOMContentLoaded', async () => {
                 body: JSON.stringify(reviewContentCommand)
             });
 
-            const feedback = await response.json();
+            if (!response.ok) {
+                throw new Error('Failed to submit content for review');
+            }
 
             onContentFinishedReview()
         } catch (error) {
