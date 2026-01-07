@@ -12,13 +12,12 @@ const app = express();
 const PORT = 3000;
 
 // Middleware
-const baseUrl = process.env.BASE_PATH || path.join(__dirname, '..');
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
-app.use(express.static(baseUrl));
+app.use(express.static(path.join(__dirname, '..')));
 
 // Load template once at startup
-const TEMPLATE_PATH = path.join(baseUrl, 'template', 'template.html');
+const TEMPLATE_PATH = path.join(__dirname, '..', 'template', 'template.html');
 const TEMPLATE = fs.readFileSync(TEMPLATE_PATH, 'utf8');
 
 // ==================== CONTENT API ====================
@@ -29,8 +28,8 @@ const TEMPLATE = fs.readFileSync(TEMPLATE_PATH, 'utf8');
  * @returns {{ content: Object }} Content object for the document
  */
 app.get('/api/data/:documentId', async (req, res) => {
+    const documentId = req.params.documentId;
     try {
-        const documentId = req.params.documentId;
         if (!documentId) {
             return res.status(400).json({ error: 'documentId parameter is required' });
         }
@@ -38,7 +37,7 @@ app.get('/api/data/:documentId', async (req, res) => {
         res.json({ content: content });
     } catch (error) {
         console.error('Database read error:', error);
-        res.status(500).json({ error: 'Failed to fetch content by document id' + documentId });
+        res.status(500).json({ error: 'Failed to fetch content by document id: ' + documentId });
     }
 });
 
@@ -204,8 +203,12 @@ app.get('/doc/:id', async (req, res) => {
     }
 });
 
-/** GET * - Redirect unknown routes to home */
-app.get('*', (req, res) => {
+/** Redirect unknown HTML routes to home (exclude static files) */
+app.get('*', (req, res, next) => {
+    // Let static files through (they have extensions)
+    if (path.extname(req.path)) {
+        return next(); // Will result in 404 from Express
+    }
     res.redirect('/');
 });
 

@@ -12,7 +12,7 @@ if (!process.env.MODEL) {
 }
 
 const REVIEW_PROMPT = fs.readFileSync(
-    path.resolve('prompt-review.txt'),
+    path.join(__dirname, 'prompt-review.txt'),
     'utf8'
 );
 
