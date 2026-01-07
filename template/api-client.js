@@ -1,72 +1,99 @@
-// Basic JavaScript for the simple HTML framework
-
-// Simple database using server-side JSON file for cross-browser persistence
-class ApiClient {
-    constructor(baseUrl = '') {
-        this.baseUrl = baseUrl;
+// Document API client for content operations
+class DocumentApi {
+    constructor(documentId) {
+        this.documentId = documentId;
+        this.content = null;
     }
 
-    async save(key, value) {
+    async loadContent() {
         try {
-            const response = await fetch(`${this.baseUrl}/api/data/${encodeURIComponent(key)}`, {
+            const response = await fetch(`/api/data/${this.documentId}`);
+            if (response.ok) {
+                const data = await response.json();
+                this.content = data.content || {};
+                return this.content;
+            }
+        } catch (error) {
+            console.error('Failed to load content:', error);
+            alert('Fehler beim Laden der Aufgabe');
+        }
+        return {};
+    }
+
+    async saveContent(updates) {
+        try {
+            // Merge updates with existing content
+            this.content = { ...this.content, ...updates };
+
+            const response = await fetch(`/api/data/${this.documentId}`, {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({ value }),
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(this.content),
             });
             return response.ok;
         } catch (error) {
-            console.error('Server save failed:', error);
+            console.error('Failed to save content:', error);
             return false;
         }
     }
 
-    async require(key) {
-        try {
-            const response = await fetch(`${this.baseUrl}/api/data/${encodeURIComponent(key)}`);
-            if (response.ok) {
-                const data = await response.json();
-                return data.value ?? null;
-            }
-        } catch (error) {
-            console.error('Server load failed:', error);
+    async submitReview() {
+        const response = await fetch(`/api/content/review/${this.documentId}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+        });
+        if (!response.ok) {
+            throw new Error('Failed to submit for review');
         }
     }
 }
 
 // Wait for the DOM to be fully loaded before executing code
 document.addEventListener('DOMContentLoaded', async () => {
-    const db = new ApiClient();
+    // Get document ID from meta tag
+    const documentId = document.querySelector('meta[name="document-id"]')?.content;
+    if (!documentId) {
+        console.error('Document ID not found');
+        redirectToHomepage();
+        return;
+    }
+
+    const api = new DocumentApi(documentId);
 
     const taskTextarea = document.getElementById('task-input');
     const contentTextarea = document.getElementById('content-input');
     const submitBtn = document.getElementById('submit-btn');
-    const feedbackSection = await initFeedbackSection();
-
-    await loadSavedContent(taskTextarea, 'task');
-    await loadSavedContent(contentTextarea, 'content');
-
-    trackWrittenWordsCount();
-
-    submitBtn.addEventListener('click', () => reviewOnClick());
-
-
-    if (feedbackSection) {
-        makeFileReadonly();
-        return;
-    }
 
     if (!taskTextarea || !contentTextarea || !submitBtn) {
         console.error('Required elements not found in the DOM');
+        redirectToHomepage();
         return;
     }
 
+    const content = await api.loadContent();
 
-    enableAutosave(taskTextarea, 'task');
-    enableAutosave(contentTextarea, 'content');
+    // Initialize form with saved content
+    taskTextarea.value = content.task || '';
+    contentTextarea.value = content.submissionText || '';
 
-    trackTextareaInput(contentTextarea);
+    trackWrittenWordsCount();
+
+    const feedbackSection = initFeedbackSection(content);
+
+    submitBtn.addEventListener('click', () => reviewOnClick());
+
+    if (feedbackSection) {
+        makeDocumentReadonly();
+    } else {
+        enableAutosave(taskTextarea, 'task');
+        enableAutosave(contentTextarea, 'submissionText');
+        trackTextareaInput(contentTextarea);
+    }
+
+    function redirectToHomepage() {
+        alert('Ein Fehler ist aufgetreten. Sie werden zurück zur Startseite geleitet.');
+        window.location.href = '/';
+    }
 
     function trackWrittenWordsCount() {
         const setWrittenWordsCount = () => {
@@ -83,15 +110,11 @@ document.addEventListener('DOMContentLoaded', async () => {
         });
     }
 
-    async function initFeedbackSection() {
-        const [score, feedback, correction] = await Promise.all([
-            db.require(reviewScoreKey()),
-            db.require(reviewFeedbackKey()),
-            db.require(reviewCorrectionKey())
-        ]);
+    function initFeedbackSection(content) {
+        const { reviewScore, reviewFeedback, correction } = content;
 
-        if (score === null || !feedback || !correction) {
-            return;
+        if (reviewScore === null || !reviewFeedback || !correction) {
+            return null;
         }
 
         const feedbackSection = document.getElementById('review-section');
@@ -102,24 +125,24 @@ document.addEventListener('DOMContentLoaded', async () => {
         const reviewReadonlyCorrectionSpan = document.getElementById('review-readonly-correction');
         const reviewEditableCorrectionTextarea = document.getElementById('review-editable-correction');
 
-        enableAutosave(reviewEditableCorrectionTextarea, 'content-review-correction');
+        enableAutosave(reviewEditableCorrectionTextarea, 'correction');
 
-        reviewScoreSpan.textContent = score;
-        reviewFeedbackSpan.textContent = feedback;
+        reviewScoreSpan.textContent = reviewScore;
+        reviewFeedbackSpan.textContent = reviewFeedback;
 
-        renderCorrection(correction, reviewReadonlyCorrectionSpan);
+        renderReadonlyReview(correction, reviewReadonlyCorrectionSpan);
         reviewEditableCorrectionTextarea.value = correction;
         reviewEditableCorrectionTextarea.hidden = true;
 
         reviewReadonlyCorrectionSpan.addEventListener('click', () => {
             reviewReadonlyCorrectionSpan.hidden = true;
             reviewEditableCorrectionTextarea.hidden = false;
-            reviewEditableCorrectionTextarea.focus();
+            reviewEditableCorrectionTextarea.focus({preventScroll: true});
         });
 
         let timeout;
 
-        [{ eventType: 'blur', delay: 500 }, { eventType: 'input', delay: 10000 }].forEach(({ eventType, delay }) => {
+        [{ eventType: 'blur', delay: 500 }, { eventType: 'input', delay: 30000 }].forEach(({ eventType, delay }) => {
 
             reviewEditableCorrectionTextarea.addEventListener(eventType, () => {
                 clearTimeout(timeout);
@@ -127,26 +150,22 @@ document.addEventListener('DOMContentLoaded', async () => {
                 timeout = setTimeout(() => {
                     const updatedText = reviewEditableCorrectionTextarea.value;
 
-                    renderCorrection(updatedText, reviewReadonlyCorrectionSpan);
+                    renderReadonlyReview(updatedText, reviewReadonlyCorrectionSpan);
 
                     reviewReadonlyCorrectionSpan.hidden = false;
                     reviewEditableCorrectionTextarea.hidden = true;
                 }, delay);
             });
-        })
-
+        });
 
         feedbackSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
-
-
 
         return feedbackSection;
     }
 
-    function renderCorrection(text, container) {
+    function renderReadonlyReview(text, container) {
         // Escape HTML first
         let escaped = text
-            .replace(/\\n/g, '\n')
             .replace(/&/g, '&amp;')
             .replace(/</g, '&lt;')
             .replace(/>/g, '&gt;')
@@ -173,10 +192,10 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
 
-    function makeFileReadonly() {
+    function makeDocumentReadonly() {
         taskTextarea.disabled = true;
         contentTextarea.disabled = true;
-        submitBtn.innerHTML = '<i class="bi bi-arrow-clockwise me-2"></i>Review Again';
+        submitBtn.innerHTML = '<i class="bi bi-arrow-clockwise me-2"></i>Erneut korrigieren';
         submitBtn.disabled = false;
     }
 
@@ -184,54 +203,20 @@ document.addEventListener('DOMContentLoaded', async () => {
         return text.trim().split(/\s+/).filter(word => word.length > 0).length;
     }
 
-    function taskKey() {
-        return key('task');
-    }
-
-    function contentKey() {
-        return key('content');
-    }
-
-    function reviewScoreKey() {
-        return key('content-review-score');
-    }
-
-    function reviewFeedbackKey() {
-        return key('content-review-feedback');
-    }
-
-    function reviewCorrectionKey() {
-        return key('content-review-correction');
-    }
-
-    function key(keySuffix) {
-        return `${document.title}-${keySuffix}`;
-    }
-
-    function canSubmitWritingForReview() {
+    function isTextReviewable() {
         return countWords(contentTextarea.value) >= 100;
     }
 
-    async function loadSavedContent(textarea, keySuffix) {
-        try {
-            const savedContent = await db.require(key(keySuffix));
-            if (savedContent) {
-                textarea.value = savedContent;
-            }
-        } catch (error) {
-            console.error(`Failed to load saved content for ${keySuffix}:`, error);
-        }
-    }
-
-    function enableAutosave(textarea, keySuffix) {
+    function enableAutosave(textarea, field) {
         let saveTimeout;
 
         textarea.addEventListener('input', function () {
             clearTimeout(saveTimeout);
             saveTimeout = setTimeout(async () => {
-                const success = await db.save(key(keySuffix), textarea.value);
+                const success = await api.saveContent({ [field]: textarea.value });
                 if (!success) {
-                    console.error(`Failed to save content for ${keySuffix}`);
+                    alert('Die automatische Speicherung ist fehlgeschlagen.');
+                    console.error(`Failed to save content for ${field}`);
                 }
             }, 500);
         });
@@ -240,7 +225,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     function trackTextareaInput(textarea) {
         textarea.addEventListener('input', () => {
-            if (!canSubmitWritingForReview()) {
+            if (!isTextReviewable()) {
                 submitBtn.disabled = true;
                 return;
             } else {
@@ -250,37 +235,17 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     async function reviewOnClick() {
-        if (!canSubmitWritingForReview()) {
+        if (!isTextReviewable()) {
             console.error('Not enough words to submit for review');
             return;
         }
 
         onContentBeingReviewed();
-        const reviewContentCommand = {
-            taskId: taskKey(),
-            contentId: contentKey()
-        }
 
         try {
-            const response = await fetch('/api/content/review', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify(reviewContentCommand)
-            });
-
-            if (!response.ok) {
-                throw new Error('Failed to submit content for review');
-            }
-
-            onContentFinishedReview()
+            await api.submitReview();
+            onContentFinishedReview();
         } catch (error) {
-            // Ignore errors caused by page reload/navigation
-            if (error.name === 'AbortError' || error.name === 'TypeError') {
-                console.log('Request cancelled (page reload or navigation)');
-                return;
-            }
             console.error('Error while submitting content for review:', error);
             onContentFailedReview();
         }
@@ -295,8 +260,9 @@ document.addEventListener('DOMContentLoaded', async () => {
         taskTextarea.disabled = true;
         contentTextarea.disabled = true;
 
-        if (feedbackSection) {
-            feedbackSection.hidden = true;
+        const reviewSection = document.getElementById('review-section');
+        if (reviewSection) {
+            reviewSection.hidden = true;
         }
     }
 
@@ -307,7 +273,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     function onContentFailedReview() {
         // Reset button state
         submitBtn.disabled = false;
-        submitBtn.innerHTML = 'Try Again';
+        submitBtn.innerHTML = 'Erneut versuchen';
         submitBtn.classList.remove('loading');
 
         // Re-enable textareas

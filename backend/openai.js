@@ -1,10 +1,6 @@
 const OpenAI = require('openai');
 const fs = require('fs');
 const path = require('path');
-
-
-
-// Load environment variables
 require('dotenv').config();
 
 // Check for required environment variables
@@ -26,9 +22,12 @@ const openai = new OpenAI({
 });
 
 /**
- * Count words in text using OpenAI
- * @param {string} text - The text to count words in
- * @returns {Promise<number>} The word count
+ * Review content using OpenAI and get feedback
+ * @param {Object} reviewContentCommand - The review command
+ * @param {string} reviewContentCommand.taskContent - The task/prompt description
+ * @param {string} reviewContentCommand.contentText - The user's submission text to review
+ * @returns {Promise<{score: number, feedback: string, correction: string}>} Review result with score, feedback and corrected text
+ * @throws {Error} If OpenAI API call fails
  */
 async function reviewContent(reviewContentCommand) {
     try {

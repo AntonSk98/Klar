@@ -6,50 +6,78 @@ const he = require('he');
 // Load environment variables
 require('dotenv').config();
 
-const db = require('./db');
+const repository = require('./repository');
 const openai = require('./openai');
 const app = express();
 const PORT = 3000;
 
 // Middleware
+const baseUrl = process.env.BASE_PATH || path.join(__dirname, '..');
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
-
-const BASE_PATH = process.env.BASE_PATH || path.join(__dirname, '..');
-app.use(express.static(BASE_PATH));
+app.use(express.static(baseUrl));
 
 // Load template once at startup
-const TEMPLATE_PATH = path.join(BASE_PATH, 'template', 'template.html');
+const TEMPLATE_PATH = path.join(baseUrl, 'template', 'template.html');
 const TEMPLATE = fs.readFileSync(TEMPLATE_PATH, 'utf8');
 
-// API Endpoint to retrieve data by key
-app.get('/api/data/:key', async (req, res) => {
+// ==================== CONTENT API ====================
+
+/**
+ * GET /api/data/:documentId
+ * Retrieve content for a document
+ * @returns {{ content: Object }} Content object for the document
+ */
+app.get('/api/data/:documentId', async (req, res) => {
     try {
-        const value = await db.getData(req.params.key);
-        res.json({ value });
+        const documentId = req.params.documentId;
+        if (!documentId) {
+            return res.status(400).json({ error: 'documentId parameter is required' });
+        }
+        const content = await repository.getContent(documentId);
+        res.json({ content: content });
     } catch (error) {
         console.error('Database read error:', error);
-        res.status(500).json({ error: 'Failed to read data' });
+        res.status(500).json({ error: 'Failed to fetch content by document id' + documentId });
     }
 });
 
-// API Endpoint to store data by key
-app.post('/api/data/:key', async (req, res) => {
+/**
+ * POST /api/data/:documentId
+ * Create or update content for a document
+ * @body {Object} content - Content fields to upsert (task, submissionText, etc.)
+ * @returns {{ success: boolean }}
+ */
+app.post('/api/data/:documentId', async (req, res) => {
     try {
-        await db.setData(req.params.key, req.body.value);
+        const documentId = req.params.documentId;
+        const contentData = req.body;
+        
+        if (!documentId) {
+            return res.status(400).json({ error: 'documentId parameter is required' });
+        }
+        
+        await repository.upsertContent({
+            documentId,
+            ...contentData
+        });
         res.json({ success: true });
     } catch (error) {
         console.error('Database write error:', error);
-        res.status(500).json({ error: 'Failed to save data' });
+        res.status(500).json({ error: 'Failed to save content' });
     }
 });
 
 // ==================== DOCUMENT API ====================
 
-// List all documents
+/**
+ * GET /api/documents
+ * List all documents
+ * @returns {Array<{id: string, title: string, creationDate: string}>}
+ */
 app.get('/api/documents', async (req, res) => {
     try {
-        const documents = await db.getDocuments();
+        const documents = await repository.getDocuments();
         res.json(documents);
     } catch (error) {
         console.error('Error listing documents:', error);
@@ -57,34 +85,44 @@ app.get('/api/documents', async (req, res) => {
     }
 });
 
-// Create a new document
+/**
+ * POST /api/documents
+ * Create a new document
+ * @body {{ title: string }} - Document title
+ * @returns {{ success: boolean, document: Object }}
+ */
 app.post('/api/documents', async (req, res) => {
     const { title } = req.body;
     if (!title || !title.trim()) {
-        return res.status(400).json({ error: 'Title is required' });
+        return res.status(400).json({ error: 'Title is required to create a document' });
     }
 
     try {
-        const document = await db.createDocument(title.trim());
+        const document = await repository.createDocument(title.trim());
         res.json({ success: true, document });
     } catch (error) {
-        if (error.message.includes('already exists')) {
+        if (error === repository.DUPLICATE_DOCUMENT_ERROR) {
             return res.status(400).json({ error: error.message });
         }
+
         console.error('Error creating document:', error);
         res.status(500).json({ error: 'Failed to create document' });
     }
 });
 
-// Delete a document
+/**
+ * DELETE /api/documents/:id
+ * Delete a document and its associated content
+ * @returns {{ success: boolean }}
+ */
 app.delete('/api/documents/:id', async (req, res) => {
     const { id } = req.params;
     
     try {
-        await db.deleteDocument(id);
+        await repository.deleteDocument(id);
         res.json({ success: true });
     } catch (error) {
-        if (error.message === 'Document not found') {
+        if (error === repository.DOCUMENT_NOT_FOUND_ERROR) {
             return res.status(404).json({ error: 'Document not found' });
         }
         console.error('Error deleting document:', error);
@@ -94,20 +132,39 @@ app.delete('/api/documents/:id', async (req, res) => {
 
 // ==================== CONTENT REVIEW API ====================
 
-app.post('/api/content/review', async (req, res) => {
-    const reviewContentCommand = req.body;
-    if (!reviewContentCommand) {
-        return res.status(400).json({ error: 'Review content command is required' });
+/**
+ * POST /api/content/review/:documentId
+ * Submit document content for AI review
+ * @returns {{ success: boolean, message: string }}
+ */
+app.post('/api/content/review/:documentId', async (req, res) => {
+    const { documentId } = req.params;
+    
+    if (!documentId) {
+        return res.status(400).json({ error: 'documentId is required' });
     }
 
     try {
-        const taskContent = await db.getData(reviewContentCommand.taskId);
-        const contentText = await db.getData(reviewContentCommand.contentId);
-        const review = await openai.reviewContent({ taskContent, contentText });
+        // Get existing content for this document
+        const content = await repository.getContent(documentId);
+        if (!content || !content.submissionText) {
+            return res.status(400).json({ error: 'No submission text found for review' });
+        }
 
-        await db.setData(`${reviewContentCommand.contentId}-review-score`, review.score);
-        await db.setData(`${reviewContentCommand.contentId}-review-feedback`, review.feedback);
-        await db.setData(`${reviewContentCommand.contentId}-review-correction`, review.correction);
+        // Call OpenAI for review
+        const review = await openai.reviewContent({ 
+            taskContent: content.task, 
+            contentText: content.submissionText 
+        });
+
+        // Update content with review results
+        await repository.upsertContent({
+            ...content,
+            documentId,
+            reviewScore: review.score,
+            reviewFeedback: review.feedback,
+            correction: review.correction
+        });
 
         res.json({
             success: true,
@@ -115,27 +172,28 @@ app.post('/api/content/review', async (req, res) => {
         });
     } catch (error) {
         console.error('Error while reviewing content:', error);
-        res.status(500).json({ error: 'Failed to review content' } );
+        res.status(500).json({ error: 'Failed to review content' });
     }
 });
 
 // ==================== PAGE ROUTES ====================
 
-// Main page (file manager)
+/** GET / - Serve the main index page */
 app.get('/', (req, res) => {
     res.sendFile(path.join(__dirname, 'index.html'));
 });
 
-// Document page - serve template dynamically
+/** GET /doc/:id - Serve document editor page */
 app.get('/doc/:id', async (req, res) => {
     try {
-        const document = await db.getDocument(req.params.id);
+        const document = await repository.getDocument(req.params.id);
         if (!document) {
             return res.redirect('/');
         }
 
         // Replace placeholders in template (escaped to prevent XSS)
         const html = TEMPLATE
+            .replace(/{{documentId}}/g, he.encode(document.id))
             .replace(/{{filename}}/g, he.encode(document.title))
             .replace(/{{creationDate}}/g, he.encode(document.creationDate));
 
@@ -146,13 +204,12 @@ app.get('/doc/:id', async (req, res) => {
     }
 });
 
-// Catch-all route: redirect any invalid URLs to the root
+/** GET * - Redirect unknown routes to home */
 app.get('*', (req, res) => {
     res.redirect('/');
 });
 
 app.listen(PORT, async () => {
-    await db.initializeDatabase();
-    console.log(`🚀 TelcWrite server running at http://localhost:${PORT}`);
-    console.log(`📝 Open http://localhost:${PORT} to manage your documents\n`);
+    await repository.initializeDatabase();
+    console.log(`🚀 TelcWrite server running on port ${PORT}`);
 });
