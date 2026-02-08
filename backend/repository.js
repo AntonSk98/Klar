@@ -185,6 +185,30 @@ async function upsertContent(upsertContentCommand) {
 }
 
 
+/**
+ * Get all documents with their associated content for export
+ * @returns {Promise<Array<{id, title, creationDate, task, submissionText, reviewScore, reviewFeedback, correction}>>}
+ */
+async function getAllDocumentsWithContent() {
+    await db.read();
+    const allDocuments = (db.data.documents || []).slice().sort((a, b) => {
+        return new Date(b.creationDate) - new Date(a.creationDate);
+    });
+    return allDocuments.map(doc => {
+        const content = (db.data.contents || []).find(c => c.documentId === doc.id) || {};
+        return {
+            id: doc.id,
+            title: doc.title,
+            creationDate: doc.creationDate,
+            task: content.task || '',
+            submissionText: content.submissionText || '',
+            reviewScore: content.reviewScore ?? null,
+            reviewFeedback: content.reviewFeedback || '',
+            correction: content.correction || ''
+        };
+    });
+}
+
 module.exports = {
     initializeDatabase,
     getDocuments,
@@ -193,5 +217,6 @@ module.exports = {
     deleteDocument,
     getContent,
     upsertContent,
+    getAllDocumentsWithContent,
     DUPLICATE_DOCUMENT_ERROR
 };

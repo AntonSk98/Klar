@@ -177,6 +177,23 @@ app.post('/api/content/review/:documentId', async (req, res) => {
     }
 });
 
+// ==================== EXPORT API ====================
+
+/**
+ * GET /api/export
+ * Export all documents with their content
+ * @returns {Array} All documents with content
+ */
+app.get('/api/export', async (req, res) => {
+    try {
+        const data = await repository.getAllDocumentsWithContent();
+        res.json(data);
+    } catch (error) {
+        console.error('Error exporting data:', error);
+        res.status(500).json({ error: 'Failed to export data' });
+    }
+});
+
 // ==================== PAGE ROUTES ====================
 
 /** GET / - Serve the main index page */
@@ -196,7 +213,9 @@ app.get('/doc/:id', async (req, res) => {
         const html = TEMPLATE
             .replace(/{{documentId}}/g, he.encode(document.id))
             .replace(/{{filename}}/g, he.encode(document.title))
-            .replace(/{{creationDate}}/g, he.encode(document.creationDate));
+            .replace(/{{creationDate}}/g, he.encode(
+                new Date(document.creationDate).toLocaleString('de-DE')
+            ));
 
         res.send(html);
     } catch (error) {
@@ -212,6 +231,11 @@ app.get('*', (req, res, next) => {
         return next(); // Will result in 404 from Express
     }
     res.redirect('/');
+});
+
+// Serve pdf-export.js
+app.get('/pdf-export.js', (req, res) => {
+    res.sendFile(path.join(__dirname, 'pdf-export.js'));
 });
 
 app.listen(PORT, async () => {
