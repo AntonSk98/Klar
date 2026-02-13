@@ -19,7 +19,7 @@ RUN mkdir -p /app/data
 EXPOSE 3000
 
 # Set default DB path for Docker
-ENV DB_PATH=/app/data/telcwrite_db.json
+ENV DB_PATH=/app/data/klar_db.json
 
 # Environment variable validation script
 RUN echo '#!/bin/sh' > /app/entrypoint.sh && \

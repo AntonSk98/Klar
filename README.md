@@ -1,10 +1,10 @@
-# TelcWrite
+# Klar
 
 A web application to practice German writing skills for the TELC B1 exam with AI-powered feedback and corrections.
 
-## Why TelcWrite?
+## Why Klar?
 
-Preparing for the TELC B1 writing exam is challenging without a teacher to review your texts. TelcWrite solves this by providing instant AI feedback on your German writing:
+Preparing for the TELC B1 writing exam is challenging without a teacher to review your texts. Klar solves this by providing instant AI feedback on your German writing:
 
 - **Instant corrections** - See exactly what's wrong with highlighted deletions and additions
 - **TELC B1 scoring** - Get a score based on official TELC criteria
@@ -29,28 +29,28 @@ Preparing for the TELC B1 writing exam is challenging without a teacher to revie
 
 **Build the image:**
 ```bash
-docker build -t telcwrite .
+docker build -t klar .
 ```
 
 **Run the container:**
 ```bash
 docker run -d \
-  --name telcwrite \
+  --name klar \
   -p 3000:3000 \
   -e OPENAI_TOKEN=your-openai-api-key \
   -e MODEL=gpt-5.2 \
-  -v telcwrite-data:/app/data \
-  telcwrite
+  -v klar-data:/app/data \
+  klar
 ```
 
 Open http://localhost:3000
 
 **Manage the container:**
 ```bash
-docker stop telcwrite    # Stop
-docker start telcwrite   # Start again
-docker logs telcwrite    # View logs
-docker rm telcwrite      # Remove
+docker stop klar    # Stop
+docker start klar   # Start again
+docker logs klar    # View logs
+docker rm klar      # Remove
 ```
 
 ### Option 2: Run Locally

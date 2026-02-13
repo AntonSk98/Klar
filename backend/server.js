@@ -197,7 +197,7 @@ app.get('/api/export', async (req, res) => {
 /** GET /api/db/export - Download raw database as JSON */
 app.get('/api/db/export', (req, res) => {
     const dbPath = path.resolve(process.env.DB_PATH || './db.json');
-    res.download(dbPath, 'telcwrite-backup.json');
+    res.download(dbPath, 'klar_backup.json');
 });
 
 /** POST /api/db/import - Import database from JSON */
@@ -263,5 +263,5 @@ app.get('*', (req, res, next) => {
 
 app.listen(PORT, async () => {
     await repository.initializeDatabase();
-    console.log(`🚀 TelcWrite server running on port ${PORT}`);
+    console.log(`🚀 Klar server running on port ${PORT}`);
 });

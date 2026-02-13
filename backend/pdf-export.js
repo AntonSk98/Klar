@@ -1,5 +1,5 @@
 /**
- * TelcWrite PDF Export — minimalist, single accent color.
+ * Klar PDF Export.
  */
 
 let _jsPDFReady = null;
@@ -84,7 +84,7 @@ async function generatePdf(data) {
     pdf.setFontSize(20);
     pdf.setTextColor(...accent);
     pdf.setFont('helvetica', 'bold');
-    pdf.text('TelcWrite', M, y);
+    pdf.text('Klar', M, y);
     y += 6;
     pdf.setFontSize(8);
     pdf.setTextColor(...gray);
@@ -185,8 +185,8 @@ async function generatePdf(data) {
         }
     });
 
-    pdf.save('TelcWrite.pdf');
+    pdf.save('Klar.pdf');
 }
 
-window.TelcWriteExport = { generatePdf };
+window.KlarExport = { generatePdf };
 
