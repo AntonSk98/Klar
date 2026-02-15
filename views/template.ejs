@@ -16,7 +16,7 @@
 
 <body>
   <!-- Server-injected document content (parsed by Alpine on init) -->
-  <script id="initial-data" type="application/json"><%- contentJson %></script>
+  <script id="initial-data" type="application/json"><%- contentJson.replace(/<\//g, '<\\/') %></script>
 
   <div class="container py-4 py-md-5" style="max-width: 968px;" x-data="documentEditor()">
 
@@ -135,7 +135,7 @@
       const initial = JSON.parse(document.getElementById('initial-data')?.textContent || '{}');
 
       return {
-        documentId: <%- JSON.stringify(documentId) %>,
+        documentId: '<%= documentId %>',
         task: initial.task || '',
         submissionText: initial.submissionText || '',
         reviewScore: initial.reviewScore ?? null,

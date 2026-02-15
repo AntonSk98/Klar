@@ -1,5 +1,5 @@
 const express = require('express');
-const fs = require('fs');
+const fs = require('fs/promises');
 const { DB_PATH } = require('../config');
 const repository = require('../repository');
 const openai = require('../services/openai');
@@ -14,16 +14,12 @@ const router = express.Router();
  * Retrieve content for a document
  */
 router.get('/data/:documentId', async (req, res) => {
-    const { documentId } = req.params;
     try {
-        if (!documentId) {
-            return res.status(400).json({ error: 'documentId parameter is required' });
-        }
-        const content = await repository.getContent(documentId);
+        const content = await repository.getContent(req.params.documentId);
         res.json({ content });
     } catch (error) {
         console.error('Database read error:', error);
-        res.status(500).json({ error: 'Failed to fetch content by document id: ' + documentId });
+        res.status(500).json({ error: 'Failed to fetch content' });
     }
 });
 
@@ -33,11 +29,7 @@ router.get('/data/:documentId', async (req, res) => {
  */
 router.post('/data/:documentId', async (req, res) => {
     try {
-        const { documentId } = req.params;
-        if (!documentId) {
-            return res.status(400).json({ error: 'documentId parameter is required' });
-        }
-        await repository.upsertContent({ documentId, ...req.body });
+        await repository.upsertContent({ documentId: req.params.documentId, ...req.body });
         res.json({ success: true });
     } catch (error) {
         console.error('Database write error:', error);
@@ -179,7 +171,7 @@ router.post('/db/import', express.json({ limit: '10mb' }), async (req, res) => {
         if (!data || !Array.isArray(data.documents) || !Array.isArray(data.contents)) {
             return res.status(400).json({ error: 'Ungültiges Datenbankformat' });
         }
-        fs.writeFileSync(DB_PATH, JSON.stringify(data, null, 2));
+        await fs.writeFile(DB_PATH, JSON.stringify(data, null, 2));
         await repository.initializeDatabase();
         res.json({ success: true });
     } catch (error) {

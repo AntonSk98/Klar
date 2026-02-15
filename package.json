@@ -1,7 +1,7 @@
 {
   "name": "klar",
   "version": "1.0.0",
-  "description": "Server-based HTML file manager with cross-browser persistence",
+  "description": "Practice German writing for the TELC B1 exam with AI-powered corrections",
   "main": "backend/server.js",
   "scripts": {
     "start": "node backend/server.js"
@@ -10,16 +10,19 @@
     "dotenv": "^17.2.3",
     "ejs": "^4.0.1",
     "express": "^4.18.0",
-    "he": "^1.2.0",
     "lowdb": "^6.0.1",
     "openai": "^6.15.0",
     "pdfkit": "^0.17.2"
   },
+  "engines": {
+    "node": ">=20"
+  },
   "keywords": [
-    "html",
-    "file-manager",
-    "web-app",
-    "persistence"
+    "german",
+    "telc",
+    "writing",
+    "ai",
+    "language-learning"
   ],
   "author": "",
   "license": "Apache-2.0"

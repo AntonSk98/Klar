@@ -1,3 +1,3 @@
-*.env
-*db.json
+.env
+backend/db.json
 node_modules/

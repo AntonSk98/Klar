@@ -38,8 +38,13 @@ async function reviewContent(reviewContentCommand) {
         });
 
         const feedback = completion.choices[0].message.content;
+        const result = JSON.parse(feedback);
 
-        return JSON.parse(feedback);
+        if (typeof result.score !== 'number' || typeof result.feedback !== 'string' || typeof result.correction !== 'string') {
+            throw new Error('Invalid response shape from OpenAI: missing score, feedback, or correction');
+        }
+
+        return result;
     } catch (error) {
         console.error('OpenAI API error:', error);
         throw new Error('Failed to get review from OpenAI');

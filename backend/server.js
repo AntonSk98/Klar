@@ -19,7 +19,14 @@ app.set('views', VIEWS_DIR);
 app.use('/api', apiRoutes);
 app.use(partialRoutes);
 
-app.listen(PORT, async () => {
+async function start() {
     await repository.initializeDatabase();
-    console.log(`🚀 Klar server running on port ${PORT}`);
+    app.listen(PORT, () => {
+        console.log(`🚀 Klar server running on port ${PORT}`);
+    });
+}
+
+start().catch(error => {
+    console.error('❌ Failed to start server:', error);
+    process.exit(1);
 });
